@@ -3,27 +3,33 @@ library(shinydashboard)
 library(dplyr)
 library(ggplot2)
 
+
 url_mzcr <- "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19"
 
 get_data_url <- function(urlx) {
-    df <- data.table::fread(paste(url_mzcr, urlx, sep = "/"))
+    df <- data.table::fread(paste(url_mzcr, urlx, sep = "/"), encoding = "UTF-8")
     return(df)
 }
 nakazeni_vyleceni_umrti_testy <- get_data_url("nakazeni-vyleceni-umrti-testy.csv")
+obce <- get_data_url("obce.csv")
+
+#ui####
 ui <- dashboardPage(skin = "yellow",
     dashboardHeader(title = "Epi data"),
     dashboardSidebar(
-        sidebarMenu(
+        sidebarMenu( #Menu####
             menuItem("Nákaza", tabname = "nakaza", icon = icon("medkit"),
                 menuSubItem("Nákaza kumulativní", tabName = "nakaza_cumul"),
                 menuSubItem("Aktuálně nakažených", tabName = "nakaza_actual")
-            )
+                ),
+            menuItem("Přehled podle obcí", tabName = "obce", icon = icon("map-marked-alt"))
+            
         )
     ),
     dashboardBody(
-        tabItems(
+        tabItems( #Nakaza####
             tabItem(tabName = "nakaza_cumul",
-                    fluidRow(
+                    fluidRow( #Kumulativni####
                         headerPanel("Kumulativní nákaza"),
                         box(title = "Možnosti", status = "warning", solidHeader = TRUE,
                             dateRangeInput("date_nakaza_cumul",
@@ -38,7 +44,7 @@ ui <- dashboardPage(skin = "yellow",
                             plotly::plotlyOutput("nakaza_kumulativni_plot"), width = 8)
                     )),
             tabItem(tabName = "nakaza_actual",
-                    fluidRow(
+                    fluidRow( #Aktualni####
                         headerPanel("Aktuální nákaza"),
                         box(title = "Možnosti", status = "warning", solidHeader = TRUE,
                             dateRangeInput("date_nakaza_actual",
@@ -51,13 +57,26 @@ ui <- dashboardPage(skin = "yellow",
                             width = 4),
                         box(title = "Graf", status = "primary", solidHeader = TRUE,
                             plotly::plotlyOutput("nakaza_aktualni_plot"), width = 8)
-                    ))
+                    )),
+            tabItem(tabName = "obce",
+                    fluidRow( #Obce####
+                        headerPanel("Data dle obcí"),
+                        box(title = "Možnosti", status = "warning", solidHeader = TRUE,
+                            selectizeInput("kraj", "Zvolte kraj", choices = sort(unique(obce$kraj_nazev))),
+                            selectizeInput("okres", "Zvolte okres", choices = NULL),
+                            selectizeInput("obec", "Zvolte obec", choices = NULL),
+                            width = 4)
+                    )
+                
+            )
         )
     )
 )
 
 
 server <- function(input, output, session) {
+#Nakaza####
+#Kumulativni####
     nakaza_kumul_plot <- reactive({
         nakazeni_vyleceni_umrti_testy %>%
             filter(datum >= input$date_nakaza_cumul[1], datum <= input$date_nakaza_cumul[2])%>%
@@ -75,7 +94,7 @@ server <- function(input, output, session) {
     output$popis_cumul <- renderText({
         "Graf zobrazuje kumulativní nákazu podle hlášení hygienických stanic."
     })
-    
+#Aktualni#####  
     nakaza_aktualni_plot <- reactive({
         nakazeni_vyleceni_umrti_testy %>%
             mutate(nakazeni_aktualne = kumulativni_pocet_nakazenych - kumulativni_pocet_umrti - kumulativni_pocet_vylecenych)%>%
@@ -94,7 +113,27 @@ server <- function(input, output, session) {
     output$popis_actual <- renderText({
         "Graf zobrazuje aktuální nákazu podle hlášení hygienických stanic."
     })
-   
+    
+#Obce####
+
+    observe({
+        updateSelectizeInput(session, "okres", choices = obce %>%
+                                 filter(kraj_nazev == input$kraj)%>%
+                                 pull(okres_nazev)%>%
+                                 unique()%>%
+                                 sort(), server = TRUE)
+    })
+
+    observe({
+        updateSelectizeInput(session, "obec", choices = obce %>%
+                                 filter(okres_nazev == input$okres)%>%
+                                 pull(obec_nazev)%>%
+                                 unique()%>%
+                                 sort(), server = TRUE)
+    })
+    
+
+
 }
 
 shinyApp(ui = ui, server = server)

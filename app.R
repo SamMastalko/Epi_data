@@ -26,7 +26,9 @@ ui <- dashboardPage(skin = "yellow",
                                        start = "2020-01-27",
                                        end = Sys.Date(),
                                        min = "2020-01-27",
-                                       max = Sys.Date()), width = 3),
+                                       max = Sys.Date()),
+                            textOutput("popis_cumul"),
+                            width = 3),
                         box(plotly::plotlyOutput("nakaza_kumulativni_plot"))
                     ))
         )
@@ -39,15 +41,18 @@ server <- function(input, output, session) {
         nakazeni_vyleceni_umrti_testy %>%
             filter(datum >= input$date_nakaza_cumul[1], datum <= input$date_nakaza_cumul[2])%>%
             ggplot(aes(datum, kumulativni_pocet_nakazenych))+
-            geom_line(color = "gold")+
-            scale_x_date(date_breaks = "1 month")+
-            theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+            geom_line(color = "gray16")+
+            scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))+
             xlab("Datum")+
             ylab("Kumulativní počet nakažených")
     })
     
     output$nakaza_kumulativni_plot <- plotly::renderPlotly({
         nakaza_kumul_plot()
+    })
+    output$popis_cumul <- renderText({
+        "Graf zobrazuje kumulativní nákazu podle hlášení hygienických stanic."
     })
    
 }

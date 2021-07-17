@@ -65,7 +65,10 @@ ui <- dashboardPage(skin = "yellow",
                             selectizeInput("kraj", "Zvolte kraj", choices = sort(unique(obce$kraj_nazev))),
                             selectizeInput("okres", "Zvolte okres", choices = NULL),
                             selectizeInput("obec", "Zvolte obec", choices = NULL),
-                            width = 4)
+                            actionButton("button_obec", "Zobrazit data"),
+                            width = 3),
+                        box(title = "Graf", status = "primary", solidHeader = TRUE,
+                            plotly::plotlyOutput("aktivni_obec"), width = 9)
                     )
                 
             )
@@ -132,7 +135,22 @@ server <- function(input, output, session) {
                                  sort(), server = TRUE)
     })
     
-
+    aktivni_obec_plot <- eventReactive (input$button_obec,{
+        obce %>%
+            filter(kraj_nazev == input$kraj, okres_nazev == input$okres, obec_nazev == input$obec)%>%
+            ggplot(aes(datum, aktivni_pripady))+
+            geom_line(color = "gray16")+
+            scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+            xlab("Datum")+
+            ylab("Aktuální počet nakažených")
+    })
+    output$aktivni_obec <- plotly::renderPlotly({
+        validate(
+            need(input$obec != "", "Zadejte obec a potvrdte stisknutim tlacitka")
+        )
+        aktivni_obec_plot()
+    })
 
 }
 

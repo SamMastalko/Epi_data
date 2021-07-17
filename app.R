@@ -3,7 +3,7 @@ library(shinydashboard)
 library(dplyr)
 library(ggplot2)
 
-
+#data####
 url_mzcr <- "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19"
 
 get_data_url <- function(urlx) {
@@ -12,6 +12,7 @@ get_data_url <- function(urlx) {
 }
 nakazeni_vyleceni_umrti_testy <- get_data_url("nakazeni-vyleceni-umrti-testy.csv")
 obce <- get_data_url("obce.csv")
+kraj_okres_nakazeni_vyleceni_umrti <- get_data_url("kraj-okres-nakazeni-vyleceni-umrti.csv")
 
 #ui####
 ui <- dashboardPage(skin = "yellow",
@@ -67,8 +68,10 @@ ui <- dashboardPage(skin = "yellow",
                             selectizeInput("obec", "Zvolte obec", choices = NULL),
                             actionButton("button_obec", "Zobrazit data"),
                             width = 3),
-                        box(title = "Graf", status = "primary", solidHeader = TRUE,
-                            plotly::plotlyOutput("aktivni_obec"), width = 9)
+                        box(title = "Aktivní případy v obci", status = "primary", solidHeader = TRUE,
+                            plotly::plotlyOutput("aktivni_obec"), width = 9),
+                        box(title = "Okresní data", status = "primary", solidHeader = TRUE,
+                            plotly::plotlyOutput("okres"), width = 12)
                     )
                 
             )
@@ -151,7 +154,32 @@ server <- function(input, output, session) {
         )
         aktivni_obec_plot()
     })
+    #Okres####
+    okres_plot <- eventReactive(input$button_obec, {
+        kraj_okres_nakazeni_vyleceni_umrti %>%
+            filter(okres_lau_kod == obce%>%
+                       filter(okres_nazev == (input$okres))%>%
+                       pull(okres_lau_kod)%>%
+                       unique())%>%
+            mutate(nakaza = diff(c(0,kumulativni_pocet_nakazenych)))%>%
+            ggplot(aes(x = datum,y = nakaza))+
+            geom_line()+
+            scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+            xlab("Datum")+
+            ylab("Přírůstková data")
+    })
+    output$okres <- plotly::renderPlotly({
+        validate(
+            need(input$obec != "", "Zadejte obec a potvrdte stisknutim tlacitka")
+        )
+        okres_plot()
+    })
 
 }
 
 shinyApp(ui = ui, server = server)
+
+
+
+

@@ -3,10 +3,11 @@ library(shinydashboard)
 library(dplyr)
 library(ggplot2)
 
+
 url_mzcr <- "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19"
 
 get_data_url <- function(urlx) {
-    df <- data.table::fread(paste(url_mzcr, urlx, sep = "/"))
+    df <- data.table::fread(paste(url_mzcr, urlx, sep = "/"), encoding = "UTF-8")
     return(df)
 }
 nakazeni_vyleceni_umrti_testy <- get_data_url("nakazeni-vyleceni-umrti-testy.csv")
@@ -60,10 +61,10 @@ ui <- dashboardPage(skin = "yellow",
             tabItem(tabName = "obce",
                     fluidRow( #Obce####
                         headerPanel("Data dle obcí"),
-                        box(title = "Možnosti", status = warning, solidHeader = TRUE,
-                            uiOutput("kraj"),
-                            uiOutput("okres"),
-                            uiOutput("obec"),
+                        box(title = "Možnosti", status = "warning", solidHeader = TRUE,
+                            selectizeInput("kraj", "Zvolte kraj", choices = sort(unique(obce$kraj_nazev))),
+                            selectizeInput("okres", "Zvolte okres", choices = NULL),
+                            selectizeInput("obec", "Zvolte obec", choices = NULL),
                             width = 4)
                     )
                 
@@ -114,45 +115,25 @@ server <- function(input, output, session) {
     })
     
 #Obce####
-    output$kraj <- renderUI({
-        selectInput(inputId = "Kraj", "Zvolte kraj",choices = var_kraj(), multiple = F)
+
+    observe({
+        updateSelectizeInput(session, "okres", choices = obce %>%
+                                 filter(kraj_nazev == input$kraj)%>%
+                                 pull(okres_nazev)%>%
+                                 unique()%>%
+                                 sort(), server = TRUE)
     })
-    output$okres <- renderUI({
-        selectInput(inputId = "Okres", "Zvolte okres",choices = var_okres(), multiple = F)
-    })
-    output$obec <- renderUI({
-        selectInput(inputId = "Obec", "Zvolte obec",choices = var_obec(), multiple = F)
-    })
-    obce_filter <- reactive({
-        filter(obce, kraj_nazev %in% kraj(), okres_nazev %in% okres(), obec_nazev %in% obec())
-    })
-    kraj <- reactive({
-        if (is.null(input$Kraj)) unique(obce$kraj_nazev) else input$Kraj
-    })
-    
-    okres <- reactive({
-        if (is.null(input$Okres)) unique(obce$okres_nazev) else input$Okres
+
+    observe({
+        updateSelectizeInput(session, "obec", choices = obce %>%
+                                 filter(okres_nazev == input$okres)%>%
+                                 pull(obec_nazev)%>%
+                                 unique()%>%
+                                 sort(), server = TRUE)
     })
     
-    obec <- reactive({
-        if (is.null(input$Obec)) unique(obce$obec_nazev) else input$Obec
-    })
-    var_kraj <- reactive({
-        unique(obce$kraj_nazev)
-    })
-    
-    var_okres <- reactive({
-        filter(obce, okres_nazev %in% okres()) %>% 
-            pull(okres_nazev) %>% 
-            unique()
-    })
-    
-    var_obec <- reactive({
-        filter(obce, okres_nazev %in% okres(), obec_nazev %in% obec()) %>% 
-            pull(obec_nazev) %>% 
-            unique()
-    })
-   
+
+
 }
 
 shinyApp(ui = ui, server = server)

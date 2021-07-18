@@ -77,10 +77,10 @@ ui <- dashboardPage(skin = "yellow",
                             actionButton("button_obec", "Zobrazit data"),
                             width = 3),
                         box(title = "Aktivní případy v obci", status = "primary", solidHeader = TRUE,
-                            textOutput("obec_title"),
+                            h3(textOutput("obec_title")),
                             plotly::plotlyOutput("aktivni_obec"), width = 9),
                         box(title = "Okresní data", status = "primary", solidHeader = TRUE,
-                            textOutput("okres_title"),
+                            h3(textOutput("okres_title")),
                             plotly::plotlyOutput("render_okres"), width = 12)
                     )
                 
@@ -187,7 +187,7 @@ server <- function(input, output, session) {
     })
 #Okres####
     er_okres_title <- eventReactive(input$button_obec, {
-        paste(input$okres)
+        paste("Okres",input$okres)
     })
     output$okres_title <- renderText({
         er_okres_title()

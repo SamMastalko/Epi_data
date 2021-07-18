@@ -21,7 +21,7 @@ ui <- dashboardPage(skin = "yellow",
         sidebarMenu( #Menu####
             menuItem("Nákaza", tabname = "nakaza", icon = icon("medkit"),
                 menuSubItem("Nákaza kumulativní", tabName = "nakaza_cumul"),
-                menuSubItem("Aktuálně nakažených", tabName = "nakaza_actual")
+                menuSubItem("Aktivní případy", tabName = "nakaza_actual")
                 ),
             menuItem("Přehled podle obcí", tabName = "obce", icon = icon("map-marked-alt"))
             
@@ -45,8 +45,8 @@ ui <- dashboardPage(skin = "yellow",
                             plotly::plotlyOutput("nakaza_kumulativni_plot"), width = 8)
                     )),
             tabItem(tabName = "nakaza_actual",
-                    fluidRow( #Aktualni####
-                        headerPanel("Aktuální nákaza"),
+                    fluidRow( #Aktivni####
+                        headerPanel("Aktivní případy"),
                         box(title = "Možnosti", status = "warning", solidHeader = TRUE,
                             dateRangeInput("date_nakaza_actual",
                                            "Zvolte datum",
@@ -66,12 +66,20 @@ ui <- dashboardPage(skin = "yellow",
                             selectizeInput("kraj", "Zvolte kraj", choices = sort(unique(obce$kraj_nazev))),
                             selectizeInput("okres", "Zvolte okres", choices = NULL),
                             selectizeInput("obec", "Zvolte obec", choices = NULL),
+                            dateRangeInput("date_obce",
+                                           "Zvolte datum",
+                                           start = "2020-03-01",
+                                           end = Sys.Date(),
+                                           min = "2020-03-01",
+                                           max = Sys.Date()),
                             actionButton("button_obec", "Zobrazit data"),
                             width = 3),
                         box(title = "Aktivní případy v obci", status = "primary", solidHeader = TRUE,
+                            textOutput("obec_title"),
                             plotly::plotlyOutput("aktivni_obec"), width = 9),
                         box(title = "Okresní data", status = "primary", solidHeader = TRUE,
-                            plotly::plotlyOutput("okres"), width = 12)
+                            textOutput("okres_title"),
+                            plotly::plotlyOutput("render_okres"), width = 12)
                     )
                 
             )
@@ -120,8 +128,7 @@ server <- function(input, output, session) {
         "Graf zobrazuje aktuální nákazu podle hlášení hygienických stanic."
     })
     
-#Obce####
-
+#Input obce/okres####
     observe({
         updateSelectizeInput(session, "okres", choices = obce %>%
                                  filter(kraj_nazev == input$kraj)%>%
@@ -137,10 +144,20 @@ server <- function(input, output, session) {
                                  unique()%>%
                                  sort(), server = TRUE)
     })
-    
+#Obce plot#### 
+    er_obec_title <- eventReactive(input$button_obec, {
+        paste(input$obec)
+        })
+    output$obec_title <- renderText({
+        er_obec_title()
+    })
     aktivni_obec_plot <- eventReactive (input$button_obec,{
         obce %>%
-            filter(kraj_nazev == input$kraj, okres_nazev == input$okres, obec_nazev == input$obec)%>%
+            filter(kraj_nazev == input$kraj,
+                   okres_nazev == input$okres,
+                   obec_nazev == input$obec,
+                   datum >= input$date_obce[1],
+                   datum <= input$date_obce[2])%>%
             ggplot(aes(datum, aktivni_pripady))+
             geom_line(color = "gray16")+
             scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
@@ -154,22 +171,30 @@ server <- function(input, output, session) {
         )
         aktivni_obec_plot()
     })
-    #Okres####
+#Okres####
+    er_okres_title <- eventReactive(input$button_obec, {
+        paste(input$okres)
+    })
+    output$okres_title <- renderText({
+        er_okres_title()
+    })
     okres_plot <- eventReactive(input$button_obec, {
         kraj_okres_nakazeni_vyleceni_umrti %>%
             filter(okres_lau_kod == obce%>%
                        filter(okres_nazev == (input$okres))%>%
                        pull(okres_lau_kod)%>%
-                       unique())%>%
+                       unique(),
+                   datum >= input$date_obce[1],
+                   datum <= input$date_obce[2])%>%
             mutate(nakaza = diff(c(0,kumulativni_pocet_nakazenych)))%>%
-            ggplot(aes(x = datum,y = nakaza))+
+            ggplot(aes(x = datum, y = nakaza))+
             geom_line()+
             scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
             theme(axis.text.x = element_text(angle = 90, hjust = 1))+
             xlab("Datum")+
             ylab("Přírůstková data")
     })
-    output$okres <- plotly::renderPlotly({
+    output$render_okres <- plotly::renderPlotly({
         validate(
             need(input$obec != "", "Zadejte obec a potvrdte stisknutim tlacitka")
         )

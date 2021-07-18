@@ -13,6 +13,7 @@ get_data_url <- function(urlx) {
 nakazeni_vyleceni_umrti_testy <- get_data_url("nakazeni-vyleceni-umrti-testy.csv")
 obce <- get_data_url("obce.csv")
 kraj_okres_nakazeni_vyleceni_umrti <- get_data_url("kraj-okres-nakazeni-vyleceni-umrti.csv")
+umrti <- get_data_url("umrti.csv")
 
 #ui####
 ui <- dashboardPage(skin = "yellow",
@@ -23,7 +24,8 @@ ui <- dashboardPage(skin = "yellow",
                 menuSubItem("Nákaza kumulativní", tabName = "nakaza_cumul"),
                 menuSubItem("Aktivní případy", tabName = "nakaza_actual")
                 ),
-            menuItem("Přehled podle obcí", tabName = "obce", icon = icon("map-marked-alt"))
+            menuItem("Přehled podle obcí", tabName = "obce", icon = icon("map-marked-alt")),
+            menuItem("Úmrtí", tabName = "umrti", icon = icon("cross"))
             
         )
     ),
@@ -82,7 +84,19 @@ ui <- dashboardPage(skin = "yellow",
                             plotly::plotlyOutput("render_okres"), width = 12)
                     )
                 
-            )
+            ),
+            tabItem(tabName = "umrti",
+                    fluidRow( #Umrti####
+                        headerPanel("Úmrtí"),
+                        tabBox(width = 12,
+                            tabPanel("Kumulativně",
+                                     plotly::plotlyOutput("umrti_kumul")),
+                            tabPanel("Přírůstkově",
+                                     plotly::plotlyOutput("umrti_rust")),
+                            tabPanel("Dle věku a pohlaví",
+                                     plotly::plotlyOutput("umrti_vek_pohlavi"))
+                        )
+                    ))
         )
     )
 )
@@ -200,11 +214,46 @@ server <- function(input, output, session) {
         )
         okres_plot()
     })
-
+#umrti####
+    umrti_kumul_plot <- nakazeni_vyleceni_umrti_testy %>%
+        ggplot(aes(x = datum, y = kumulativni_pocet_umrti))+
+        geom_line()+
+        scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+        xlab("Datum")+
+        ylab("Kumulativní počet úmrtí")
+    
+    output$umrti_kumul <- plotly::renderPlotly({
+        umrti_kumul_plot
+    })
+    
+    umrti_rust_plot <- umrti %>%
+        group_by(datum)%>%
+        summarise(n = n())%>%
+        ggplot(aes(datum, n))+
+        geom_line()+
+        scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+        xlab("Datum")+
+        ylab("Denní počet úmrtí")
+    
+    output$umrti_rust <- plotly::renderPlotly({
+        umrti_rust_plot
+    })
+    
+    umrti_vek_pohlavi_plot <- umrti %>%
+        ggplot(aes(x = as.factor(vek), fill = pohlavi))+
+        geom_bar(position = "dodge")+
+        scale_fill_manual(values = c("cyan4", "firebrick4"))+
+        xlab("Věk")+
+        ylab("Počet úmrtí")+
+        scale_x_discrete(breaks = as.character(seq(10, 100, by = 10)))
+    
+    output$umrti_vek_pohlavi <- plotly::renderPlotly({
+        umrti_vek_pohlavi_plot
+    })
 }
 
 shinyApp(ui = ui, server = server)
-
-
 
 

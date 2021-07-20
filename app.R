@@ -1,6 +1,7 @@
 library(shiny)
 library(shinydashboard)
 library(dplyr)
+library(lubridate)
 library(ggplot2)
 
 #data####
@@ -224,10 +225,11 @@ server <- function(input, output, session) {
                    datum >= input$date_obce[1],
                    datum <= input$date_obce[2])%>%
             mutate(nakaza = diff(c(0,kumulativni_pocet_nakazenych)))%>%
-            group_by(datum = lubridate::round_date(datum, unit = sprintf("%s day", 7)))%>%
+            group_by(datum = round_date(datum, unit = "week")) %>% 
+            summarise(nakaza = sum(nakaza, na.rm = TRUE)) %>%
             ggplot(aes(x = datum, y = nakaza))+
             geom_line()+
-            scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+            # scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
             theme(axis.text.x = element_text(angle = 90, hjust = 1))+
             xlab("Datum")+
             ylab("Přírůstková data")
@@ -279,5 +281,3 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
-
-

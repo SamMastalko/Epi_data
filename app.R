@@ -84,7 +84,7 @@ ui <- dashboardPage(skin = "yellow",
                         box(title = "Aktivní případy v obci", status = "primary", solidHeader = TRUE,
                             h3(textOutput("obec_title")),
                             plotly::plotlyOutput("aktivni_obec"), width = 9),
-                        box(title = "Okresní data", status = "primary", solidHeader = TRUE,
+                        box(title = "Okresní přírůstkový graf", status = "primary", solidHeader = TRUE,
                             h3(textOutput("okres_title")),
                             plotly::plotlyOutput("render_okres"), width = 12)
                     )
@@ -100,7 +100,9 @@ ui <- dashboardPage(skin = "yellow",
                                      plotly::plotlyOutput("umrti_rust")),
                             tabPanel("Dle věku a pohlaví",
                                      plotly::plotlyOutput("umrti_vek_pohlavi"))
-                        )
+                        ),
+                        box(title = "Data", status = "primary", solidHeader = TRUE,
+                            DT::DTOutput("umrti_table"), width = 12)
                     ))
         )
     )
@@ -225,14 +227,12 @@ server <- function(input, output, session) {
                    datum >= input$date_obce[1],
                    datum <= input$date_obce[2])%>%
             mutate(nakaza = diff(c(0,kumulativni_pocet_nakazenych)))%>%
-            group_by(datum = round_date(datum, unit = "week")) %>% 
-            summarise(nakaza = sum(nakaza, na.rm = TRUE)) %>%
             ggplot(aes(x = datum, y = nakaza))+
             geom_line()+
-            # scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+            scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
             theme(axis.text.x = element_text(angle = 90, hjust = 1))+
             xlab("Datum")+
-            ylab("Přírůstková data")
+            ylab("Okresní přírůstková data - denní")
     })
     output$render_okres <- plotly::renderPlotly({
         validate(
@@ -277,6 +277,9 @@ server <- function(input, output, session) {
     
     output$umrti_vek_pohlavi <- plotly::renderPlotly({
         umrti_vek_pohlavi_plot
+    })
+    output$umrti_table <- DT::renderDT({
+        DT::datatable(umrti, options = list(scrollX = TRUE))
     })
 }
 

@@ -44,7 +44,9 @@ ui <- dashboardPage(skin = "yellow",
                             textOutput("popis_cumul"),
                             width = 4),
                         box(title = "Graf", status = "primary", solidHeader = TRUE,
-                            plotly::plotlyOutput("nakaza_kumulativni_plot"), width = 8)
+                            plotly::plotlyOutput("nakaza_kumulativni_plot"), width = 8),
+                        box(title = "Data", status = "primary", solidHeader = TRUE,
+                            DT::DTOutput("nakaza_kumulativni_table"), width = 12)
                     )),
             tabItem(tabName = "nakaza_actual",
                     fluidRow( #Aktivni####
@@ -59,7 +61,9 @@ ui <- dashboardPage(skin = "yellow",
                             textOutput("popis_actual"),
                             width = 4),
                         box(title = "Graf", status = "primary", solidHeader = TRUE,
-                            plotly::plotlyOutput("nakaza_aktualni_plot"), width = 8)
+                            plotly::plotlyOutput("nakaza_aktualni_plot"), width = 8),
+                        box(title = "Data", status = "primary", solidHeader = TRUE,
+                            DT::DTOutput("nakaza_aktualni_table"), width = 12)
                     )),
             tabItem(tabName = "obce",
                     fluidRow( #Obce####
@@ -122,6 +126,15 @@ server <- function(input, output, session) {
     output$popis_cumul <- renderText({
         "Graf zobrazuje kumulativní nákazu podle hlášení hygienických stanic."
     })
+    nakaza_kumul_dt <- reactive({DT::datatable(nakazeni_vyleceni_umrti_testy %>%
+                                         filter(datum >= input$date_nakaza_cumul[1],
+                                                datum <= input$date_nakaza_cumul[2])%>%
+                                         select(datum:kumulativni_pocet_testu),
+                                         options = list(scrollX = TRUE)
+                                     )})
+    output$nakaza_kumulativni_table <- DT::renderDT({
+        nakaza_kumul_dt()
+    })
 #Aktualni#####  
     nakaza_aktualni_plot <- reactive({
         nakazeni_vyleceni_umrti_testy %>%
@@ -132,14 +145,24 @@ server <- function(input, output, session) {
             scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
             theme(axis.text.x = element_text(angle = 90, hjust = 1))+
             xlab("Datum")+
-            ylab("Aktuální počet nakažených")
+            ylab("Aktivní případy")
     })
     
     output$nakaza_aktualni_plot <- plotly::renderPlotly({
         nakaza_aktualni_plot()
     })
     output$popis_actual <- renderText({
-        "Graf zobrazuje aktuální nákazu podle hlášení hygienických stanic."
+        "Graf zobrazuje aktivní případy podle hlášení hygienických stanic."
+    })
+    nakaza_aktual_dt <- reactive({DT::datatable(nakazeni_vyleceni_umrti_testy %>%
+                                                    filter(datum >= input$date_nakaza_cumul[1],
+                                                          datum <= input$date_nakaza_cumul[2])%>%
+                                                    mutate(nakazeni_aktualne = kumulativni_pocet_nakazenych - kumulativni_pocet_umrti - kumulativni_pocet_vylecenych)%>%
+                                                    select(datum, prirustkovy_pocet_nakazenych:nakazeni_aktualne),
+                                               options = list(scrollX = TRUE)
+    )})
+    output$nakaza_aktualni_table <- DT::renderDT({
+        nakaza_aktual_dt()
     })
     
 #Input obce/okres####
@@ -201,6 +224,7 @@ server <- function(input, output, session) {
                    datum >= input$date_obce[1],
                    datum <= input$date_obce[2])%>%
             mutate(nakaza = diff(c(0,kumulativni_pocet_nakazenych)))%>%
+            group_by(datum = lubridate::round_date(datum, unit = sprintf("%s day", 7)))%>%
             ggplot(aes(x = datum, y = nakaza))+
             geom_line()+
             scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+

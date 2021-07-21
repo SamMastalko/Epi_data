@@ -68,7 +68,7 @@ ui <- dashboardPage(skin = "yellow",
                     )),
             tabItem(tabName = "obce",
                     fluidRow( #Obce####
-                        headerPanel("Data dle obcí"),
+                        headerPanel("Data dle obce a okresu"),
                         box(title = "Možnosti", status = "warning", solidHeader = TRUE,
                             selectizeInput("kraj", "Zvolte kraj", choices = sort(unique(obce$kraj_nazev))),
                             selectizeInput("okres", "Zvolte okres", choices = NULL),
@@ -84,9 +84,13 @@ ui <- dashboardPage(skin = "yellow",
                         box(title = "Aktivní případy v obci", status = "primary", solidHeader = TRUE,
                             h3(textOutput("obec_title")),
                             plotly::plotlyOutput("aktivni_obec"), width = 9),
-                        box(title = "Okresní přírůstkový graf", status = "primary", solidHeader = TRUE,
-                            h3(textOutput("okres_title")),
-                            plotly::plotlyOutput("render_okres"), width = 12)
+                        tabBox(title = "Okresní přírůstky",
+                            tabPanel("Denní",
+                                     h3(textOutput("okres_title")),
+                                     plotly::plotlyOutput("render_okres")),
+                            tabPanel("Týdenní",
+                                     h3(textOutput("okres_title2")),
+                                     plotly::plotlyOutput("render_okres_agr")),width = 12)
                     )
                 
             ),
@@ -213,10 +217,31 @@ server <- function(input, output, session) {
     })
 #Okres####
     er_okres_title <- eventReactive(input$button_obec, {
-        paste("Okres",input$okres)
+        paste("okres",input$okres)
     })
     output$okres_title <- renderText({
         er_okres_title()
+    })
+    output$okres_title2 <- renderText({
+        er_okres_title()
+    })
+    okres_plot_agr <- eventReactive(input$button_obec, {
+        kraj_okres_nakazeni_vyleceni_umrti %>%
+            filter(okres_lau_kod == obce%>%
+                       filter(okres_nazev == (input$okres))%>%
+                       pull(okres_lau_kod)%>%
+                       unique(),
+                   datum >= input$date_obce[1],
+                   datum <= input$date_obce[2])%>%
+            mutate(nakaza = diff(c(0,kumulativni_pocet_nakazenych)))%>%
+            group_by(datum = round_date(datum, unit = "week")) %>% 
+            summarise(nakaza = sum(nakaza, na.rm = TRUE)) %>%
+            ggplot(aes(x = datum, y = nakaza))+
+            geom_line()+
+            scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+            xlab("Datum")+
+            ylab("Okresní přírůstková data - týdenní")
     })
     okres_plot <- eventReactive(input$button_obec, {
         kraj_okres_nakazeni_vyleceni_umrti %>%
@@ -239,6 +264,12 @@ server <- function(input, output, session) {
             need(input$obec != "", "Zadejte obec a potvrdte stisknutim tlacitka")
         )
         okres_plot()
+    })
+    output$render_okres_agr <- plotly::renderPlotly({
+        validate(
+            need(input$obec != "", "Zadejte obec a potvrdte stisknutim tlacitka")
+        )
+        okres_plot_agr()
     })
 #umrti####
     umrti_kumul_plot <- nakazeni_vyleceni_umrti_testy %>%

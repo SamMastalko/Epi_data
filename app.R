@@ -15,6 +15,7 @@ nakazeni_vyleceni_umrti_testy <- get_data_url("nakazeni-vyleceni-umrti-testy.csv
 obce <- get_data_url("obce.csv")
 kraj_okres_nakazeni_vyleceni_umrti <- get_data_url("kraj-okres-nakazeni-vyleceni-umrti.csv")
 umrti <- get_data_url("umrti.csv")
+testy <- get_data_url("testy-pcr-antigenni.csv")
 
 #ui####
 ui <- dashboardPage(skin = "yellow",
@@ -26,7 +27,8 @@ ui <- dashboardPage(skin = "yellow",
                 menuSubItem("Aktivní případy", tabName = "nakaza_actual")
                 ),
             menuItem("Přehled podle obcí", tabName = "obce", icon = icon("map-marked-alt")),
-            menuItem("Úmrtí", tabName = "umrti", icon = icon("cross"))
+            menuItem("Úmrtí", tabName = "umrti", icon = icon("cross")),
+            menuItem("Testování", tabName = "testy", icon = icon("vial"))
             
         )
     ),
@@ -107,7 +109,21 @@ ui <- dashboardPage(skin = "yellow",
                         ),
                         box(title = "Data", status = "primary", solidHeader = TRUE,
                             DT::DTOutput("umrti_table"), width = 12)
-                    ))
+                    )),
+            tabItem(tabName = "testy",
+                    fluidRow( #Testy####
+                    headerPanel("Testy"),
+                    tabBox(width = 12,
+                           tabPanel("Celkový počet testů",
+                                    h2("Veškeré testy včetně incidence"),
+                                    plotly::plotlyOutput("testy_sum"),
+                                    h2("Podíl pozitivních testů"),
+                                    plotly::plotlyOutput("podil_pozitivnich"),
+                                    h2(textOutput("korelace_text")),
+                                    plotly::plotlyOutput("korelace_testu"))
+                        )
+                    )
+            )
         )
     ),
     tags$head(tags$style(HTML('* {font-family: "Verdana"};')))
@@ -313,6 +329,52 @@ server <- function(input, output, session) {
     output$umrti_table <- DT::renderDT({
         DT::datatable(umrti, options = list(scrollX = TRUE))
     })
+    
+#Testy####
+    output$testy_sum <- plotly::renderPlotly(
+        testy %>%
+            mutate(pocet_testu = pocet_PCR_testy + pocet_AG_testy)%>%
+            ggplot()+
+            geom_line(aes(datum, y = pocet_testu, color = "Pocet testu"))+
+            geom_line(aes(datum, y = incidence_pozitivni, color = "Incidence pozitivni"))+
+            scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+            xlab("Datum")+
+            ylab("Počet testů")
+    )
+    
+    testy <- testy %>%
+        mutate(pocet_testu = pocet_PCR_testy + pocet_AG_testy)%>%
+        mutate(podil_pozitivnich_testu = incidence_pozitivni / pocet_testu * 100)
+    
+    
+    output$podil_pozitivnich <- plotly::renderPlotly(
+        testy %>%
+            ggplot(aes(datum, podil_pozitivnich_testu))+
+            geom_line()+
+            scale_x_date(date_breaks = "1 month", date_labels = "%B %Y")+
+            scale_y_continuous(labels = function(x) paste0(x, "%"))+
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+            xlab("Datum")+
+            ylab("Podíl pozitivních testů")
+    )
+    
+    output$korelace_testu <- plotly::renderPlotly(
+        testy %>%
+            ggplot(aes(pocet_testu, podil_pozitivnich_testu))+
+            geom_point()+
+            geom_smooth(method = "lm", se = FALSE)+
+            scale_y_continuous(labels = function(x) paste0(x, "%"))+
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+            xlab("Počet testů")+
+            ylab("Podíl pozitivních testů")
+    )
+    
+    output$korelace_text <- renderText(
+            paste("Korelace množství testů a podílu pozitivních, R = ",
+                  cor(testy$pocet_testu, testy$podil_pozitivnich_testu)))
 }
 
 shinyApp(ui = ui, server = server)
+
+

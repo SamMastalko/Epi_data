@@ -109,7 +109,8 @@ ui <- dashboardPage(skin = "yellow",
                             DT::DTOutput("umrti_table"), width = 12)
                     ))
         )
-    )
+    ),
+    tags$head(tags$style(HTML('* {font-family: "Verdana"};')))
 )
 
 

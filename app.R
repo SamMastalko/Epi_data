@@ -92,7 +92,9 @@ ui <- dashboardPage(skin = "yellow",
                                      plotly::plotlyOutput("render_okres")),
                             tabPanel("Týdenní",
                                      h3(textOutput("okres_title2")),
-                                     plotly::plotlyOutput("render_okres_agr")),width = 12)
+                                     plotly::plotlyOutput("render_okres_agr")),
+                            tabPanel("Tabulka aktuální nákazy v kraji",
+                                     DT::DTOutput("nakaza_kraj")),width = 12)
                     )
                 
             ),
@@ -288,6 +290,23 @@ server <- function(input, output, session) {
         )
         okres_plot_agr()
     })
+    
+    nakaza_kraj_table <- eventReactive(input$button_obec, {
+        DT::datatable(obce%>%
+                          filter(kraj_nazev == input$kraj,
+                                 datum == Sys.Date())%>%
+                          group_by(okres_nazev)%>%
+                          mutate(aktivni_pripady = sum(aktivni_pripady))%>%
+                          ungroup()%>%
+                          distinct(okres_nazev, aktivni_pripady, datum)
+        )
+        
+
+    })
+    
+    output$nakaza_kraj <- DT::renderDT(
+        nakaza_kraj_table()
+    )
 #umrti####
     umrti_kumul_plot <- nakazeni_vyleceni_umrti_testy %>%
         ggplot(aes(x = datum, y = kumulativni_pocet_umrti))+
@@ -362,7 +381,7 @@ server <- function(input, output, session) {
     output$korelace_testu <- plotly::renderPlotly(
         testy %>%
             ggplot(aes(pocet_testu, podil_pozitivnich_testu))+
-            geom_point()+
+            geom_point(shape = "1")+
             geom_smooth(method = "lm", se = FALSE)+
             scale_y_continuous(labels = function(x) paste0(x, "%"))+
             theme(axis.text.x = element_text(angle = 90, hjust = 1))+

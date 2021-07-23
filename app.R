@@ -122,7 +122,9 @@ ui <- dashboardPage(skin = "yellow",
                                     h2("Podíl pozitivních testů"),
                                     plotly::plotlyOutput("podil_pozitivnich"),
                                     h2(textOutput("korelace_text")),
-                                    plotly::plotlyOutput("korelace_testu"))
+                                    plotly::plotlyOutput("korelace_testu"),
+                                    h2(textOutput("korelace_text2")),
+                                    plotly::plotlyOutput("korelace_testu2"))
                         )
                     )
             )
@@ -392,7 +394,22 @@ server <- function(input, output, session) {
     output$korelace_text <- renderText(
             paste("Korelace množství testů a podílu pozitivních, R = ",
                   cor(testy$pocet_testu, testy$podil_pozitivnich_testu)))
+    output$korelace_testu2 <- plotly::renderPlotly(
+        testy %>%
+            ggplot(aes(pocet_testu, incidence_pozitivni))+
+            geom_point(shape = "1")+
+            geom_smooth(method = "lm", se = FALSE)+
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+            xlab("Počet testů")+
+            ylab("Počet pozitivních testů")
+    )
+    
+    output$korelace_text2 <- renderText(
+        paste("Korelace množství testů a počtu pozitivních, R = ",
+              cor(testy$pocet_testu, testy$incidence_pozitivni)))
 }
+
+
 
 shinyApp(ui = ui, server = server)
 

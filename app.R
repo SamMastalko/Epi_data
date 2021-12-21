@@ -134,8 +134,8 @@ ui <- dashboardPage(skin = "yellow",
             ),
             tabItem(tabName = "incidence_mapa",
                     fluidRow( #Mapa Incidence####
-                    headerPanel("Mapa sedmidenní incidence dle obcí"),
-                    box(leaflet::leafletOutput("mapa_incidence")), width = 12)
+                    box(title = "Mapa sedmidenní incidence dle obcí", status = "primary", solidHeader = TRUE,
+                        leaflet::leafletOutput("mapa_incidence"), width = 12))
                     )
         )
     ),

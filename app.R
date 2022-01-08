@@ -12,7 +12,7 @@ library(jsonlite)
 #data####
 url_mzcr <- "https://onemocneni-aktualne.mzcr.cz/api/v3/"
 cnfg <- "?page=1&itemsPerPage=10000"
-token <- "&apiToken=4cfb58b23953beef17802d31645c7200"
+token <- "&apiToken=TOKEN"
 
 get_data_url <- function(urlx) {
     if (urlx == "obce") {

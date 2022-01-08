@@ -5,20 +5,32 @@ library(lubridate)
 library(ggplot2)
 library(sp)
 library(leaflet)
+library(httr)
+library(jsonlite)
 
 
 #data####
-url_mzcr <- "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19"
+url_mzcr <- "https://onemocneni-aktualne.mzcr.cz/api/v3/"
+cnfg <- "?page=1&itemsPerPage=10000"
+token <- "&apiToken=4cfb58b23953beef17802d31645c7200"
 
 get_data_url <- function(urlx) {
-    df <- data.table::fread(paste(url_mzcr, urlx, sep = "/"), encoding = "UTF-8")
+    if (urlx == "obce") {
+        cnfg <- paste(cnfg, "&datum%5Bafter%5D=", Sys.Date(), sep = "")
+    }
+    data <- GET(paste(url_mzcr, urlx, cnfg, token, sep = ""))
+    data <- rawToChar(data$content)
+    Encoding(data) <- "UTF-8"
+    list <- fromJSON(data, flatten = TRUE)
+    df <- list$`hydra:member`
+    df <- mutate(df, datum = as.Date(datum))
     return(df)
 }
-nakazeni_vyleceni_umrti_testy <- get_data_url("nakazeni-vyleceni-umrti-testy.csv")
-obce <- get_data_url("obce.csv")
-kraj_okres_nakazeni_vyleceni_umrti <- get_data_url("kraj-okres-nakazeni-vyleceni-umrti.csv")
-umrti <- get_data_url("umrti.csv")
-testy <- get_data_url("testy-pcr-antigenni.csv")
+nakazeni_vyleceni_umrti_testy <- get_data_url("nakazeni-vyleceni-umrti-testy")
+obce <- get_data_url("obce")
+kraj_okres_nakazeni_vyleceni_umrti <- get_data_url("kraj-okres-nakazeni-vyleceni-umrti")
+umrti <- get_data_url("umrti")
+testy <- get_data_url("testy-pcr-antigenni")
 shp_list <- readRDS("./shp-list.rds")
 
 #ui####
@@ -74,7 +86,7 @@ ui <- dashboardPage(skin = "yellow",
                     )),
             tabItem(tabName = "obce",
                     fluidRow( #Obce####
-                        headerPanel("Data dle obce a okresu"),
+                        headerPanel("Data dle obce a okresu - MOMENTÁLNĚ FUNKČNÍ JEN TABULKA AKTUÁLNÍ NÁKAZY"),
                         box(title = "Možnosti", status = "warning", solidHeader = TRUE,
                             selectizeInput("kraj", "Zvolte kraj", choices = sort(unique(obce$kraj_nazev))),
                             selectizeInput("okres", "Zvolte okres", choices = NULL),
@@ -416,26 +428,26 @@ server <- function(input, output, session) {
     output$korelace_text2 <- renderText(
         paste("Korelace množství testů a počtu pozitivních, R = ",
               cor(testy$pocet_testu, testy$incidence_pozitivni)))
-#mapa####
-    df_obce <- shp_list$obce
-    obce_dnes <- obce %>% filter(datum == Sys.Date())
-    df_obce@data <- df_obce@data %>% left_join(obce_dnes, by = c("id" = "obec_kod"))
-    df_obce@data <- df_obce@data %>% mutate(incidence = nove_pripady_7_dni / (people_count / 10^5))
-    natural.interval = classInt::classIntervals(df_obce$incidence[!is.na(df_obce$incidence)], n = 6, style = "kmeans")$brks %>% unique %>% round(0)
-    pal <- leaflet::colorBin("YlOrRd", domain = df_obce$incidence, bins = natural.interval, na.color = "white", pretty = FALSE)
-    popup <- sprintf("<strong>%s</strong><br/>
-                  %s sedmidenní Incidence na 100 000 obyvatel", df_obce@data$obec_nazev, df_obce@data$incidence)
-    sl = as(shp_list$obce, "SpatialLines")
-    xsl <- rgeos::gUnion(sl,sl)
-    output$mapa_incidence <- leaflet::renderLeaflet({
-        leaflet::leaflet(df_obce) %>%
-            addProviderTiles("CartoDB.Positron") %>% addPolygons(fillColor = ~pal(incidence), weight = 2, opacity = 1, color = "white", dashArray = "", fillOpacity = 0.8,
-                                                                 highlight = highlightOptions(weight = 3, color = "#666", dashArray = "",
-                                                                                              fillOpacity = 0.8, bringToFront = TRUE, sendToBack = TRUE),
-                                                                 popup = ~popup) %>%   
-            leaflet::addLegend( pal = pal, values = factor(df_obce$incidence %>% unique), opacity = 0.7,  position = "topright")%>%
-            addPolylines(data = xsl, weight = 1, opacity = 0.1, color="black")
-    })
+# mapa####
+df_obce <- shp_list$obce
+obce_dnes <- obce %>% filter(datum == Sys.Date())
+df_obce@data <- df_obce@data %>% left_join(obce_dnes, by = c("id" = "obec_kod"))
+df_obce@data <- df_obce@data %>% mutate(incidence = nove_pripady_7_dni / (people_count / 10^5))
+natural.interval = classInt::classIntervals(df_obce$incidence[!is.na(df_obce$incidence)], n = 6, style = "kmeans")$brks %>% unique %>% round(0)
+pal <- leaflet::colorBin("YlOrRd", domain = df_obce$incidence, bins = natural.interval, na.color = "white", pretty = FALSE)
+popup <- sprintf("<strong>%s</strong><br/>
+              %s sedmidenní Incidence na 100 000 obyvatel", df_obce@data$obec_nazev, df_obce@data$incidence)
+sl = as(shp_list$obce, "SpatialLines")
+xsl <- rgeos::gUnion(sl,sl)
+output$mapa_incidence <- leaflet::renderLeaflet({
+    leaflet::leaflet(df_obce) %>%
+        addProviderTiles("CartoDB.Positron") %>% addPolygons(fillColor = ~pal(incidence), weight = 2, opacity = 1, color = "white", dashArray = "", fillOpacity = 0.8,
+                                                             highlight = highlightOptions(weight = 3, color = "#666", dashArray = "",
+                                                                                          fillOpacity = 0.8, bringToFront = TRUE, sendToBack = TRUE),
+                                                             popup = ~popup) %>%
+        leaflet::addLegend( pal = pal, values = factor(df_obce$incidence %>% unique), opacity = 0.7,  position = "topright")%>%
+        addPolylines(data = xsl, weight = 1, opacity = 0.1, color="black")
+})
 }
 
 
